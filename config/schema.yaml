@@ -1,0 +1,45 @@
+dataset_name: loan_risk_dataset
+target_column: loan_status
+
+columns:
+  _id: string
+
+  person_age: float
+  person_gender: string
+  person_education: string
+  person_income: float
+  person_emp_exp: int
+  person_home_ownership: string
+  loan_amnt: float
+  loan_intent: string
+  loan_int_rate: float
+  loan_percent_income: float
+  cb_person_cred_hist_length: float
+  credit_score: int
+  previous_loan_defaults_on_file: string
+
+target:
+  loan_status: int
+
+numerical_columns:
+  - person_age
+  - person_income
+  - person_emp_exp
+  - loan_amnt
+  - loan_int_rate
+  - loan_percent_income
+  - cb_person_cred_hist_length
+  - credit_score
+
+categorical_columns:
+  - person_gender
+  - person_education
+  - person_home_ownership
+  - loan_intent
+  - previous_loan_defaults_on_file
+  
+ 
+
+drop_columns:
+  - _id
+  
