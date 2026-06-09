@@ -37,9 +37,7 @@ categorical_columns:
   - person_home_ownership
   - loan_intent
   - previous_loan_defaults_on_file
-  
- 
 
+  
 drop_columns:
   - _id
-  

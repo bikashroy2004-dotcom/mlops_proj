@@ -44,7 +44,7 @@ class ModelTrainer:
                 min_samples_leaf = self.model_trainer_config._min_samples_leaf,
                 max_depth = self.model_trainer_config._max_depth,
                 criterion = self.model_trainer_config._criterion,
-                random_state = self.model_trainer_config._random_state
+             
             )
 
             # Fit the model

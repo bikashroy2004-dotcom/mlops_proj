@@ -49,78 +49,50 @@ class DataTransformation:
     # PREPROCESSOR
     # ---------------------------
     def get_data_transformer_object(self) -> ColumnTransformer:
+        """
+        Creates and returns a ColumnTransformer object based on numerical
+        and categorical columns defined in the schema file.
+        """
         logging.info("Creating preprocessor object")
-
         try:
-            numerical_features = self._schema_config["numerical_columns"]
-            categorical_features = self._schema_config["categorical_columns"]
+            numerical_columns = self._schema_config.get("numerical_columns", [])
+            categorical_columns = self._schema_config.get("categorical_columns", [])
 
-            numeric_pipeline = Pipeline(steps=[
-                ("scaler", StandardScaler())
-            ])
+            # Safety check: exclude dropped columns and target column from the preprocessor pipeline
+            drop_cols = self._schema_config.get("drop_columns", [])
+            numerical_columns = [col for col in numerical_columns if col not in drop_cols and col != TARGET_COLUMN]
+            categorical_columns = [col for col in categorical_columns if col not in drop_cols and col != TARGET_COLUMN]
 
-            # Fixed: Set sparse_output=False to prevent layout mismatch errors down the road
-            categorical_pipeline = Pipeline(steps=[
-                ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False))
-            ])
-
-            preprocessor = ColumnTransformer([
-                ("num", numeric_pipeline, numerical_features),
-                ("cat", categorical_pipeline, categorical_features)
-            ])
-
+            preprocessor = ColumnTransformer(
+                transformers=[
+                    ("num", StandardScaler(), numerical_columns),
+                    ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), categorical_columns)
+                ]
+            )
             return preprocessor
 
         except Exception as e:
             raise MyException(e, sys)
 
     # ---------------------------
-    # GENDER MAPPING
-    # ---------------------------
-    def _map_gender_column(self, df: pd.DataFrame) -> pd.DataFrame:
-        logging.info("Mapping gender column")
-
-        if "person_gender" in df.columns:
-            df["person_gender"] = (
-                df["person_gender"]
-                .astype(str)
-                .str.strip()
-                .str.lower()
-                .map({"female": 0, "male": 1})
-            )
-
-            df["person_gender"] = df["person_gender"].fillna(-1).astype(int)
-
-        return df
-
-    # ---------------------------
-    # BOOL CONVERSION
-    # ---------------------------
-    def _convert_bool_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        logging.info("Converting boolean columns")
-
-        for col in df.columns:
-            if df[col].dtype == "bool":
-                df[col] = df[col].astype(int)
-
-        return df
-
-    # ---------------------------
     # DROP COLUMNS
     # ---------------------------
     def _drop_id_column(self, df: pd.DataFrame) -> pd.DataFrame:
         logging.info("Dropping unwanted columns")
+        try:
+            drop_cols = self._schema_config.get("drop_columns", [])
 
-        drop_cols = self._schema_config.get("drop_columns", [])
+            if isinstance(drop_cols, str):
+                drop_cols = [drop_cols]
 
-        if isinstance(drop_cols, str):
-            drop_cols = [drop_cols]
+            for col in drop_cols:
+                # Extra safeguard: Never drop the target column if it accidentally managed to stay here
+                if col in df.columns and col != TARGET_COLUMN:
+                    df = df.drop(columns=col)
 
-        for col in drop_cols:
-            if col in df.columns:
-                df = df.drop(columns=col)
-
-        return df
+            return df
+        except Exception as e:
+            raise MyException(e, sys)
 
     # ---------------------------
     # MAIN TRANSFORMATION
@@ -137,6 +109,7 @@ class DataTransformation:
 
             logging.info(f"Train shape: {train_df.shape}, Test shape: {test_df.shape}")
 
+            # Splitting features and targets
             input_feature_train_df = train_df.drop(columns=[TARGET_COLUMN])
             target_feature_train_df = train_df[TARGET_COLUMN]
 
@@ -146,12 +119,7 @@ class DataTransformation:
             # ---------------------------
             # TRANSFORMATIONS
             # ---------------------------
-            input_feature_train_df = self._map_gender_column(input_feature_train_df)
-            input_feature_train_df = self._convert_bool_columns(input_feature_train_df)
             input_feature_train_df = self._drop_id_column(input_feature_train_df)
-
-            input_feature_test_df = self._map_gender_column(input_feature_test_df)
-            input_feature_test_df = self._convert_bool_columns(input_feature_test_df)
             input_feature_test_df = self._drop_id_column(input_feature_test_df)
 
             # SAFETY CHECK
@@ -164,7 +132,7 @@ class DataTransformation:
             logging.info("Custom preprocessing completed")
 
             # ---------------------------
-            # TRANSFORMER
+            # TRANSFORMER RUN
             # ---------------------------
             preprocessor = self.get_data_transformer_object()
 
@@ -172,9 +140,9 @@ class DataTransformation:
             input_feature_test_arr = preprocessor.transform(input_feature_test_df)
 
             # ---------------------------
-            # SMOTEENN
+            # SMOTEENN (Imbalance Handling)
             # ---------------------------
-            logging.info("Applying SMOTEENN")
+            logging.info("Applying SMOTEENN to training dataset")
 
             smt = SMOTEENN(sampling_strategy="minority")
 
@@ -197,7 +165,7 @@ class DataTransformation:
             ]
 
             # ---------------------------
-            # SAVE
+            # SAVE ARTIFACTS
             # ---------------------------
             save_object(
                 self.data_transformation_config.transformed_object_file_path,
